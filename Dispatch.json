@@ -1,0 +1,745 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "7bbac4d1-21c7-4af4-a089-3d3cfa786bb5",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -160
+      ],
+      "id": "bda528e4-6219-4eaf-82bc-1999e1368c49",
+      "name": "Webhook",
+      "webhookId": "7bbac4d1-21c7-4af4-a089-3d3cfa786bb5"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1128,
+        -40
+      ],
+      "id": "832ffbc8-9f14-4172-9ebf-4eabc72b2382",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.body.company }}",
+        "options": {
+          "scope": "node",
+          "historySize": 1000
+        }
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -160
+      ],
+      "id": "1b86a12f-fde6-441f-bbb8-81519086df13",
+      "name": "Remove Duplicates"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"subject_line\": {\n      \"type\": \"string\",\n      \"description\": \"A catchy, short cold email subject line under 5 words, lowercase\"\n    },\n    \"icebreaker\": {\n      \"type\": \"string\",\n      \"description\": \"One personalized cold email hook sentence under 20 words\"\n    },\n    \"pain_point\": {\n      \"type\": \"string\",\n      \"description\": \"The main operational bottleneck for a company of this size in this industry\"\n    }\n  },\n  \"required\": [\"subject_line\", \"icebreaker\", \"pain_point\"]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1280,
+        -32
+      ],
+      "id": "4186df82-eddf-4bd4-80cd-69f6ecdff8f0",
+      "name": "B2B Copy JSON Schema"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "50164d92162261659b91ba43509be802db3a154f"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"q\": \"{{ $('Calculate lead score').item.json.company }} company news\",\n  \"num\": 3\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        -256
+      ],
+      "id": "6e93e967-117e-48e4-9a93-045faf7fd6a7",
+      "name": "Web Search"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ $('Generate outreach hook').item.json.output.subject_line }}",
+        "message": "=Hi there,\n\n{{ $('Generate outreach hook').item.json.output.icebreaker }}\n\n{{ $('Generate outreach hook').item.json.output.pain_point }}\n\nWe help scaling teams eliminate operational bottlenecks and streamline cross-team execution.\n\nOpen to a brief 10-minute chat this Thursday?\n\nBest regards,\nYaroslav",
+        "options": {
+          "sendTo": "=contact@{{ $('Store qualified leads').item.json['Company'].toLowerCase().replace(/[^a-z0-9]/g, '') }}.com"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2144,
+        -384
+      ],
+      "id": "21eb2380-4b49-4090-840a-3323f44786da",
+      "name": "Create a draft",
+      "webhookId": "cc9be2b9-f845-4cd4-b648-db5dda8a2b34",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "q21YBcDJmU3GxpiG",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a8fa5947-2028-4ac2-aec3-255a22396a90",
+              "leftValue": "={{ $json.body.employees }}",
+              "rightValue": 20,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        -160
+      ],
+      "id": "2bb04956-8780-43ea-b620-cbb9e9b301dc",
+      "name": "ICP qualification"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "pythonNative",
+        "pythonCode": "# Безопасное извлечение payload (работает и если данные лежат в body, и если сразу в корне json)\nraw_data = _item.get('json', {})\npayload = raw_data.get('body', raw_data)\n\n# Безопасная валидация сотрудников (защита от None, строк \"50\", мусора)\nraw_employees = payload.get('employees') or payload.get('employee_count', 0)\ntry:\n    employees = int(raw_employees)\nexcept (ValueError, TypeError):\n    employees = 0\n\n# Многофакторный B2B Lead Scoring\ntarget_industries = {'saas', 'tech', 'software', 'it', 'ecommerce', 'b2b'}\nindustry = str(payload.get('industry', '')).strip().lower()\n\nscore = 0\n\n# 1. Размер компании\nif 20 <= employees <= 500:\n    score += 40  # Sweet spot для outbound\nelif employees > 500:\n    score += 30\nelif employees >= 10:\n    score += 15\n\n# 2. Отраслевое соответствие\nif any(target in industry for target in target_industries):\n    score += 40\n\n# 3. Наличие контактных данных\nif payload.get('contact_email') or payload.get('email'):\n    score += 20\n\n# Возвращаем обогащенный объект (сохраняя ВСЕ исходные поля для Gmail и Sheets)\noutput = dict(payload)\noutput.update({\n    \"lead_score\": score,\n    \"status\": \"QUALIFIED\" if score >= 60 else \"DISQUALIFIED\",\n    \"enrichment_tier\": \"TIER_1\" if score >= 80 else (\"TIER_2\" if score >= 60 else \"LOW_FIT\"),\n    \"processed_at\": _item.get('json', {}).get('timestamp')\n})\n\nreturn output"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -256
+      ],
+      "id": "484a07d6-c955-436e-9a1e-ea7621a79b42",
+      "name": "Calculate lead score"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1_diZDhnTqCiNQ1qVg8pjA9DTiLqD4MEDPyvXXIaIS0E",
+          "mode": "list",
+          "cachedResultName": "B2B Outbound Leads Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_diZDhnTqCiNQ1qVg8pjA9DTiLqD4MEDPyvXXIaIS0E/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1114867235,
+          "mode": "list",
+          "cachedResultName": "Disqualified",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_diZDhnTqCiNQ1qVg8pjA9DTiLqD4MEDPyvXXIaIS0E/edit#gid=1114867235"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company": "={{ $('Set disqualified metadata').item.json.company || $('Webhook').item.json.body.company }}",
+            "Industry": "={{ $('Set disqualified metadata').item.json.industry || $('Webhook').item.json.body.industry }}",
+            "Employees": "={{ $('Set disqualified metadata').item.json.employees || $('Webhook').item.json.body.employees || 0 }}",
+            "Lead score": "={{ $('Set disqualified metadata').item.json.lead_score || 0 }}",
+            "Status": "DISQUALIFIED"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Industry",
+              "displayName": "Industry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Employees",
+              "displayName": "Employees",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Lead score",
+              "displayName": "Lead score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        896,
+        -64
+      ],
+      "id": "a93f6b91-c067-405c-8ece-95634e520093",
+      "name": "Store disqualified leads",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "6OmcKBS3ZquDaqLZ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "pythonNative",
+        "pythonCode": "item = _item.get('json', {}).get('body', {})\n\nreturn {\n    \"company\": item.get('company'),\n    \"industry\": item.get('industry'),\n    \"employees\": item.get('employees', 0),\n    \"lead_score\": 0,\n    \"status\": \"DISQUALIFIED\",\n    \"reason\": \"Company size below ICP threshold (<20)\"\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -64
+      ],
+      "id": "e02ba539-3594-4ecc-8565-943534a0a735",
+      "name": "Set disqualified metadata"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Company: {{ $('Calculate lead score').first().json.company }}\nIndustry: {{ $('Calculate lead score').first().json.industry }}\nEmployees: {{ $('Calculate lead score').first().json.employees }}\n\nRecent Company News & Context:\n{{ $json.organic[0].snippet }}\n\nTask:\nGenerate a hyper-personalized B2B cold email opener (icebreaker) and pain point based on the company data and recent news.\nReturn JSON matching the schema.",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1120,
+        -256
+      ],
+      "id": "be4f5a33-177d-4a98-8e2b-b84137a8720d",
+      "name": "Generate outreach hook",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "executeOnce": false,
+      "alwaysOutputData": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "7197857597",
+        "text": "=⚠️ [LLM Outreach Failed] Company: {{ $('Calculate lead score').item.json.company_name || 'N/A' }} Error: {{ $json.error?.message || 'Empty or invalid model response' }} Timestamp: {{ $now.toISO() }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1920,
+        -128
+      ],
+      "id": "82b87690-5f64-4fa1-8118-c50d83851f7a",
+      "name": "Telegram error alert",
+      "webhookId": "7ee7c412-ba33-454c-8372-c17ac7011582",
+      "credentials": {
+        "telegramApi": {
+          "id": "R6iqEzpLFW6wejK6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "7197857597",
+        "text": "=🚀 <b>New Qualified Lead Processed!</b>  🏢 <b>Company:</b> {{ $('Calculate lead score').item.json.company }} ({{ $('Calculate lead score').item.json.employees }} employees) 🏷 <b>Industry:</b> {{ $('Calculate lead score').item.json.industry }} 📰 <b>Context:</b> {{ $('Web Search').item.json.organic[0].title }}  ✉️ <b>Subject:</b> {{ $('Generate outreach hook').item.json.output.subject_line }} 🎯 <b>Hook:</b> <i>\"{{ $('Generate outreach hook').item.json.output.icebreaker }}\"</i>  👉 <a href=\"https://mail.google.com/mail/u/0/#drafts\">Open Gmail Draft</a>",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2368,
+        -256
+      ],
+      "id": "bf9d5c8e-5808-4687-8633-c13cee0e38ee",
+      "name": "Sales team telegram",
+      "webhookId": "8a4e8c51-c6ad-4f9e-b5aa-5b97070ed485",
+      "credentials": {
+        "telegramApi": {
+          "id": "R6iqEzpLFW6wejK6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1_diZDhnTqCiNQ1qVg8pjA9DTiLqD4MEDPyvXXIaIS0E",
+          "mode": "list",
+          "cachedResultName": "B2B Outbound Leads Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_diZDhnTqCiNQ1qVg8pjA9DTiLqD4MEDPyvXXIaIS0E/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Qualified",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_diZDhnTqCiNQ1qVg8pjA9DTiLqD4MEDPyvXXIaIS0E/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company": "={{ $('Calculate lead score').item.json.company }}",
+            "Industry": "={{ $('Calculate lead score').item.json.industry }}",
+            "Employees": "={{ $('Calculate lead score').item.json.employees }}",
+            "Status": "={{ $('Calculate lead score').item.json.status }}",
+            "Icebreaker": "={{ $json.output.icebreaker }}",
+            "Lead score": "={{ $('Calculate lead score').item.json.lead_score }}",
+            "Subject line": "={{ $json.output?.subject_line || $json.subject_line || 'Strategic Partnership' }}",
+            "Pain point": "={{ $json.output?.pain_point || $json.pain_point || 'Operational bottlenecks' }}",
+            "AI Cost ($)": "={{ $json.metrics?.cost_usd || 0.00015 }}",
+            "Tokens used": "={{ $json.metrics?.total_tokens || 420 }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Industry",
+              "displayName": "Industry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Employees",
+              "displayName": "Employees",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lead score",
+              "displayName": "Lead score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Subject line",
+              "displayName": "Subject line",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Icebreaker",
+              "displayName": "Icebreaker",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Pain point",
+              "displayName": "Pain point",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Tokens used",
+              "displayName": "Tokens used",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Cost ($)",
+              "displayName": "AI Cost ($)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1920,
+        -384
+      ],
+      "id": "ce9da2eb-4fdd-4bcc-b955-48bf8bd3a725",
+      "name": "Store qualified leads",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "6OmcKBS3ZquDaqLZ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\n\nconst promptTokens = item.usageMetadata?.promptTokenCount || Math.ceil((item.prompt?.length || 300) / 4);\nconst completionTokens = item.usageMetadata?.candidatesTokenCount || Math.ceil((item.output?.length || 150) / 4);\nconst totalTokens = promptTokens + completionTokens;\n\nconst costInput = (promptTokens / 1000000) * 0.075;\nconst costOutput = (completionTokens / 1000000) * 0.30;\nconst totalCostUsd = +(costInput + costOutput).toFixed(6);\n\nreturn {\n  ...item,\n  metrics: {\n    prompt_tokens: promptTokens,\n    completion_tokens: completionTokens,\n    total_tokens: totalTokens,\n    cost_usd: totalCostUsd\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        -336
+      ],
+      "id": "173d8f6c-d0e2-48fc-874d-b40d01b51180",
+      "name": "AI сost & еokens"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7f408a69-5104-4fff-9974-427e3abe3fd6",
+              "leftValue": "={{ $json.output?.icebreaker || $json.icebreaker || $json.hook }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "e69c1eb9-8aca-4e85-8290-8b8b342163f5",
+              "leftValue": "={{ ($json.output?.icebreaker || $json.icebreaker || $json.hook || '').length }}",
+              "rightValue": 20,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1696,
+        -336
+      ],
+      "id": "f75d87d5-f611-466c-bab1-913b71ab8fff",
+      "name": "Is quality hook?"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate outreach hook",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "ICP qualification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B2B Copy JSON Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate outreach hook",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Web Search": {
+      "main": [
+        [
+          {
+            "node": "Generate outreach hook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a draft": {
+      "main": [
+        [
+          {
+            "node": "Sales team telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ICP qualification": {
+      "main": [
+        [
+          {
+            "node": "Calculate lead score",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set disqualified metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate lead score": {
+      "main": [
+        [
+          {
+            "node": "Web Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set disqualified metadata": {
+      "main": [
+        [
+          {
+            "node": "Store disqualified leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate outreach hook": {
+      "main": [
+        [
+          {
+            "node": "AI сost & еokens",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram error alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram error alert": {
+      "main": [
+        []
+      ]
+    },
+    "Store qualified leads": {
+      "main": [
+        [
+          {
+            "node": "Create a draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI сost & еokens": {
+      "main": [
+        [
+          {
+            "node": "Is quality hook?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is quality hook?": {
+      "main": [
+        [
+          {
+            "node": "Store qualified leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram error alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a59d92dd-5df0-499b-b950-34e6821f1081",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f9a7c817f20493b97f9b806046fe7c4d057dffa022798e2fb8e7733a93b8574d"
+  },
+  "nodeGroups": [],
+  "id": "bMYXKJeU3qWzz69o",
+  "tags": []
+}
